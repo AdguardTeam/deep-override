@@ -1,0 +1,25 @@
+{
+  "name": "deep-override",
+  "version": "1.0.0",
+  "description": "Experimental function to transparently override nested JS objects",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/seanl-adg/deep-override.git"
+  },
+  "author": "seanl-adg",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/seanl-adg/deep-override/issues"
+  },
+  "homepage": "https://github.com/seanl-adg/deep-override#readme",
+  "devDependencies": {
+    "google-closure-compiler": "^20170626.0.0",
+    "gulp": "^3.9.1",
+    "gulp-insert": "^0.5.0",
+    "gulp-mocha": "^4.3.1"
+  }
+}
