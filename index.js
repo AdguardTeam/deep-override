@@ -47,7 +47,7 @@ function AG_defineProperty ( path, descriptor, base ) {
                         var val;
                         if ( desc.hasOwnProperty('value') ) { val = desc.value; }
                         else if ( !desc.get ) { return undefined; }
-                        else { val = desc.get.call(obj); }
+                        else { val = desc.get.call(this); }
                         return override(val, nextPath);
                     },
                     set: function(incoming) {
@@ -65,7 +65,7 @@ function AG_defineProperty ( path, descriptor, base ) {
                             else { return false; }
                         }
                         if ( !desc.set ) { return false; } // Caveat: this actually should throw in strict mode.
-                        return desc.set.call(obj, incoming);
+                        return desc.set.call(this, incoming);
                     },
                     enumerable: desc ? desc.enumerable : true
                 };
