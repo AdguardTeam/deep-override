@@ -6,7 +6,7 @@ suite('deep-override', function() {
         test('Overriding simple object literals', function() {
             var getCount = setCount = 0;
             AG_defineProperty('test1.a.b', {
-                get: () => { getCount++;return 1; },
+                get: () => { getCount++; return 1; },
                 set: () => { setCount++; },
                 enumerable: true
             }, global);
@@ -24,6 +24,26 @@ suite('deep-override', function() {
             var json = JSON.parse(JSON.stringify(test1));
             assert.equal(json.a.b, 1);
         });
+
+        test('Overriding object literals with non-configurable writable property', function() {
+            var getCount = setCount = 0;
+            AG_defineProperty('test.a.b', {
+                get: () => { getCount++; return 1; },
+                set: () => { setCount++; },
+                enumerable: true
+            }, global);
+            var tmp = {};
+            Object.defineProperty(tmp, 'a', {
+                value: { b: 0 },
+                writable: true
+            });
+            global.test = tmp;
+            assert.equal(test.a.b, 1);
+            assert.equal(getCount, 1);
+            test.a.b = 0;
+            assert.equal(setCount, 1);
+            assert.equal(test.a.b, 1);
+        });
     });
 
     suite('Overriding existing objects', function() {
@@ -34,6 +54,28 @@ suite('deep-override', function() {
             var value2 = test2.a.b;
             assert.equal(value, 1);
             assert.equal(value2, 4);
+        });
+
+        test('Overriding object literals with non-configurable writable property', function() {
+            var tmp = {};
+            Object.defineProperty(tmp, 'a', {
+                value: { b: 0 },
+                writable: true
+            });
+            global.test0 = tmp;
+
+            var getCount = setCount = 0;
+            AG_defineProperty('test0.a.b', {
+                get: () => { getCount++; return 1; },
+                set: () => { setCount++; },
+                enumerable: true
+            }, global);
+
+            assert.equal(test0.a.b, 1);
+            assert.equal(getCount, 1);
+            test0.a.b = 0;
+            assert.equal(setCount, 1);
+            assert.equal(test0.a.b, 1);
         });
 
         test('It should concatenate recursion', function() {
