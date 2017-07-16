@@ -97,10 +97,10 @@ suite('deep-override', function() {
                 }
             }, global);
 
-            // Caveat: assert.equal(test3.d, null) does not hold in this case.
+            // Caveat: assert.equal(test3.d.f, null) does not hold in this case.
             // Have to access test3.a.b.c.d once to make test3.d has a desired value.
-            assert(test3.a.b.c.d, null);
-            assert(test3.d, null);
+            assert.equal(test3.a.b.c.d.f, null);
+            assert.equal(test3.d.f, null);
         })
 
         test('It should not throw on pathological recursion', function() {

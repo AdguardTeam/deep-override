@@ -3,13 +3,14 @@ const closureCompiler = require('google-closure-compiler').gulp();
 const mocha = require('gulp-mocha');
 const insert = require('gulp-insert');
 
+const esprima = require('esprima');
 
 const cc_options = {
     compilation_level: 'ADVANCED',
     language_in: 'ECMASCRIPT6',
     language_out: 'ECMASCRIPT5',
     js_output_file: 'deep-override.min.js',
-    assume_function_wrapper: false,
+    assume_function_wrapper: true,
     warning_level: 'VERBOSE',
     use_types_for_optimization: true
 };
