@@ -7,6 +7,70 @@ type readonly<T> = {
     readonly [P in keyof T]: readonly<T[P]>;
 }
 
+/****************************************************************************************/
+/****************************************************************************************/
+
+// Workaround for [Symbol.toStringTag] requirement of TS
+interface IWeakMap<K extends object, V> {
+    delete(key: K): boolean;
+    get(key: K): V | undefined;
+    has(key: K): boolean;
+    set(key: K, value: V): this;
+}
+
+interface IWeakMapCtor {
+    new (): IWeakMap<object, any>;
+    new <K extends object, V>(entries?: [K, V][]): IWeakMap<K, V>;
+    readonly prototype: IWeakMap<object, any>;
+}
+
+/****************************************************************************************/
+
+// Originally from https://github.com/Polymer/WeakMap
+
+let wm:IWeakMapCtor;
+
+if (typeof WeakMap == 'function') {
+    wm = WeakMap;
+} else {
+    let counter = Date.now() % 1e9;
+    let defineProperty = Object.defineProperty;
+    wm = class WM<K, V> {
+        private $name;
+        constructor() {
+            this.$name = '__st' + (Math.random() * 1e9 >>> 0) + (counter++ + '__');
+        }
+        set(key:K, value:V) {
+            let entry = key[this.$name];
+            if (entry && entry[0] === key)
+                entry[1] = value;
+            else
+                defineProperty(key, this.$name, {value: [key, value], writable: true});
+            return this;
+        }
+        get(key:K):V {
+            let entry;
+            return (entry = key[this.$name]) && entry[0] === key ?
+                entry[1] : undefined;
+        }
+        delete(key:K):boolean {
+            var entry = key[this.$name];
+            if (!entry) return false;
+            var hasValue = entry[0] === key;
+            entry[0] = entry[1] = undefined;
+            return hasValue;
+        }
+        has(key:K):boolean {
+            var entry = key[this.$name];
+            if (!entry) return false;
+            return entry[0] === key;
+        }
+    }
+}
+
+/****************************************************************************************/
+/****************************************************************************************/
+
 /****************************************************************************************
 
   It is an obligation of each methods to make sure that following preconditions are met:
@@ -344,7 +408,7 @@ static warnCircularReference(prop:string):void {
 
 /****************************************************************************************/
 
-private objectStateMap:WeakMap<object, IObjectState>
+private objectStateMap:IWeakMap<object, IObjectState>
 
 getObjectState(obj:object):IObjectState {
     let state = this.objectStateMap.get(obj);
@@ -358,7 +422,7 @@ getObjectState(obj:object):IObjectState {
 /****************************************************************************************/
 
 constructor() {
-    this.objectStateMap = new WeakMap<object, IObjectState>();
+    this.objectStateMap = new wm<object, IObjectState>();
 }
 
 /****************************************************************************************/
@@ -433,4 +497,3 @@ _return = (path:string, descriptor:PropertyDescriptor, base?:object):void => {
 /****************************************************************************************/
 /****************************************************************************************/
 /****************************************************************************************/
-

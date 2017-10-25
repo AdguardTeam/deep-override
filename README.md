@@ -7,3 +7,18 @@ Makes use of ES6 [Proxy](https://developer.mozilla.org/en/docs/Web/JavaScript/Re
 Does not leave messy property descriptors behind.
 
 (Todo) falls back to `Object.defineProperty` when `Proxy` is unavailable.
+
+## How to build
+
+Install dependencies by running:
+```
+yarn install
+```
+The dev build without minification can be built with:
+```
+yarn run build-dev
+```
+The minified build is available with:
+```
+yarn run build
+```
