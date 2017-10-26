@@ -1,3 +1,8 @@
+var DEBUG = false;
+
+/****************************************************************************************/
+
+
 type stringmap<T> = {
     [id: string]: T
 };
@@ -138,7 +143,7 @@ class PropertyState implements IPropertyState {
         public providedDesc?:PropertyDescriptor
     ) { }
     isConcrete():boolean {
-        return !!this.desc;
+        return this.owner.isConcrete();
     }
 }
 
@@ -169,7 +174,7 @@ clonePropState (propState:readonly<IPropertyState>, owner:IObjectState):IPropert
         owner,
         propState.prop,
         this.cloneObjectState(propState.obj),
-        <PropertyDescriptor>propState.providedDesc
+        this.cloneDesc(propState.providedDesc)
     );
     
     owner.ownProps[cloned.prop] = cloned;
@@ -211,6 +216,7 @@ clonePropState (propState:readonly<IPropertyState>, owner:IObjectState):IPropert
 /****************************************************************************************/
 
 descFactory (propState:IPropertyState):PropertyDescriptor {
+    // ToDo: enumerability fix
     let overrider = this;
     return {
         get: function() { return overrider.getRaw(propState, this); },
@@ -312,17 +318,22 @@ applyProp (propState:IPropertyState, abstractPropertyState:readonly<IPropertySta
             }
         } else {
             if (propState.isConcrete()) {
-                // Already overwritten non-configurably
-                DeepOverrideHost.warnNonConfigurableProperty(propState.prop);
+                if (propState.desc) {
+                    // Intentionally blank
+                } else {
+                    propState.desc = this.cloneDesc(abstractPropertyState.providedDesc);
+                }
             } else {
-                // Intentionally blank
+                DeepOverrideHost.warnNonConfigurableProperty(propState.prop);
             }
         }
     }
 
-    if (abstractPropertyState.obj && propState.obj) {
-        this.applyObjectState(propState.obj, abstractPropertyState.obj);
-    }    
+    if (propState.obj && abstractPropertyState.obj) {
+        if (propState.obj !== abstractPropertyState.obj) {
+            this.applyObjectState(propState.obj, abstractPropertyState.obj);
+        }
+    }
 }
 
 /****************************************************************************************/
@@ -365,16 +376,32 @@ invokeSetter (propState:IPropertyState, incoming, _this):boolean {
 /****************************************************************************************/
     
 isDataDescriptor(desc:PropertyDescriptor):boolean {
-    return desc.hasOwnProperty('writable');
+    return typeof desc.writable !== 'undefined'
+}
+
+static readonly DESC_KEYS = 'value,get,set,writable,configurable,enumerable'.split(',');
+static readonly DESC_KEYS_LENGTH = DeepOverrideHost.DESC_KEYS.length;
+
+cloneDesc(desc:readonly<PropertyDescriptor>|undefined):PropertyDescriptor|undefined {
+    if (!desc) {return undefined; }
+    let cloned = {};
+    let i = DeepOverrideHost.DESC_KEYS_LENGTH;
+    while (i--) {
+        let key = DeepOverrideHost.DESC_KEYS[i];
+        if (desc.hasOwnProperty(key)){
+            cloned[key] = desc[key];
+        }
+    }
+    return cloned;
 }
 
 compareDesc(desc1:PropertyDescriptor, desc2:PropertyDescriptor):boolean {
-    return desc1.value === desc2.value &&
-        desc1.get === desc2.get &&
-        desc1.set === desc2.set &&
-        desc1.writable === desc2.writable &&
-        desc1.configurable === desc2.configurable &&
-        desc1.enumerable === desc2.enumerable;
+    let i = DeepOverrideHost.DESC_KEYS_LENGTH;
+    while (i--) {
+        let key = DeepOverrideHost.DESC_KEYS[i];
+        if (desc1[key] !== desc2[key]) { return false; }
+    }
+    return true;
 }
 
 static defineProperty:typeof Object.defineProperty = Object.defineProperty;
@@ -383,7 +410,7 @@ static isExtensible:typeof Object.isExtensible = Object.isExtensible;
 
 /****************************************************************************************/
 
-static warn:(msg:string)=>void = typeof console !== 'undefined' ? (msg:string):void => {
+static warn:(msg:string)=>void = DEBUG && typeof console !== 'undefined' ? (msg:string):void => {
     console.warn(`AG_defineProperty: ${msg}`);
 } : () => {}
 
@@ -430,7 +457,7 @@ constructor() {
 private splitter:RegExp;
 
 throwPathError():never {
-    throw new Error("Malformed path string");
+    throw DEBUG ? new Error("Malformed path string") : null;
 }
 
 buildAbstractStateTree(path:string, root?:IObjectState):IPropertyState {
@@ -446,7 +473,7 @@ buildAbstractStateTree(path:string, root?:IObjectState):IPropertyState {
     let propData:IPropertyState|undefined;
     while (path) {
         match = splitter.exec(path);
-        if (!match) {
+        if (match === null) {
             return this.throwPathError();
         }
         matchLength = match[0].length;

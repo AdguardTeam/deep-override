@@ -22,7 +22,8 @@ suite('AG_defineProperty', function() {
 
     suite('Overriding non-existent object', function() {
         test('Overriding simple object literals', function() {
-            let getCount = setCount = 0;
+            let getCount = 0;
+            let setCount = 0;
 
             AG_defineProperty('test1.a.b', {
                 get: () => { getCount++; return 1; },
@@ -60,7 +61,8 @@ suite('AG_defineProperty', function() {
         });
 
         test('Overriding object literals with non-configurable writable property', function() {
-            var getCount = setCount = 0;
+            let getCount = 0;
+            let setCount = 0;
 
             AG_defineProperty('test.a.b', {
                 get: () => { getCount++; return 1; },
@@ -81,7 +83,10 @@ suite('AG_defineProperty', function() {
         });
 
         test('Overriding multiple properties without colision', function() {
-            let getCount1 = setCount1 = getCount2 = setCount2 = 0;
+            let getCount1 = 0;
+            let setCount1 = 0;
+            let getCount2 = 0;
+            let setCount2 = 0;
 
             AG_defineProperty('test6.a.b', {
                 get: () => { getCount1++; return 1; },
