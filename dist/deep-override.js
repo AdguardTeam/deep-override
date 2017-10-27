@@ -126,7 +126,8 @@ var DeepOverrideHost = (function () {
         // for the precise logic.
         return {
             get: function () { return overrider.getRaw(propState, this); },
-            set: function (incoming) { return overrider.setRaw(propState, incoming, this); }
+            set: function (incoming) { return overrider.setRaw(propState, incoming, this); },
+            enumerable: propState.desc ? propState.desc.enumerable : true
         };
     };
     /****************************************************************************************/
