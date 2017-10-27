@@ -1,7 +1,6 @@
-var DEBUG = false;
+let DEBUG = false;
 
 /****************************************************************************************/
-
 
 type stringmap<T> = {
     [id: string]: T
@@ -24,8 +23,8 @@ interface IWeakMap<K extends object, V> {
 }
 
 interface IWeakMapCtor {
-    new (): IWeakMap<object, any>;
-    new <K extends object, V>(entries?: [K, V][]): IWeakMap<K, V>;
+    // In our use-cases, instantiation with entries won't be used.
+    new <K extends object, V>(): IWeakMap<K, V>;
     readonly prototype: IWeakMap<object, any>;
 }
 
@@ -34,16 +33,16 @@ interface IWeakMapCtor {
 // Originally from https://github.com/Polymer/WeakMap
 
 let wm:IWeakMapCtor;
+const defineProperty = Object.defineProperty;
 
 if (typeof WeakMap == 'function') {
     wm = WeakMap;
 } else {
-    let counter = Date.now() % 1e9;
-    let defineProperty = Object.defineProperty;
+    let counter = 0;
     wm = class WM<K, V> {
-        private $name;
+        private $name:string;
         constructor() {
-            this.$name = '__st' + (Math.random() * 1e9 >>> 0) + (counter++ + '__');
+            this.$name = (counter += Math.random()).toString();
         }
         set(key:K, value:V) {
             let entry = key[this.$name];
@@ -220,7 +219,8 @@ descFactory (propState:IPropertyState):PropertyDescriptor {
     let overrider = this;
     return {
         get: function() { return overrider.getRaw(propState, this); },
-        set: function(incoming) { return overrider.setRaw(propState, incoming, this); }
+        set: function(incoming) { return overrider.setRaw(propState, incoming, this); },
+        enumerable: propState.desc!.enumerable
     };
 }
 
@@ -380,7 +380,7 @@ isDataDescriptor(desc:PropertyDescriptor):boolean {
 }
 
 static readonly DESC_KEYS = 'value,get,set,writable,configurable,enumerable'.split(',');
-static readonly DESC_KEYS_LENGTH = DeepOverrideHost.DESC_KEYS.length;
+static readonly DESC_KEYS_LENGTH = 6; /* DeepOverrideHost.DESC_KEYS.length */
 
 cloneDesc(desc:readonly<PropertyDescriptor>|undefined):PropertyDescriptor|undefined {
     if (!desc) {return undefined; }
@@ -404,9 +404,9 @@ compareDesc(desc1:PropertyDescriptor, desc2:PropertyDescriptor):boolean {
     return true;
 }
 
-static defineProperty:typeof Object.defineProperty = Object.defineProperty;
-static getOwnPropertyDescriptor:typeof Object.getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
-static isExtensible:typeof Object.isExtensible = Object.isExtensible;
+static defineProperty = defineProperty;
+static getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+static isExtensible = Object.isExtensible;
 
 /****************************************************************************************/
 
@@ -457,7 +457,7 @@ constructor() {
 private splitter:RegExp;
 
 throwPathError():never {
-    throw DEBUG ? new Error("Malformed path string") : null;
+    throw DEBUG ? new Error("Malformed path string") : 1;
 }
 
 buildAbstractStateTree(path:string, root?:IObjectState):IPropertyState {
