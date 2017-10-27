@@ -22,3 +22,7 @@ The minified build is available with:
 ```
 yarn run build
 ```
+Run tests with build output with:
+```
+yarn run test
+```
