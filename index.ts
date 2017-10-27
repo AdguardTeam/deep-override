@@ -219,8 +219,7 @@ descFactory (propState:IPropertyState):PropertyDescriptor {
     let overrider = this;
     return {
         get: function() { return overrider.getRaw(propState, this); },
-        set: function(incoming) { return overrider.setRaw(propState, incoming, this); },
-        enumerable: propState.desc!.enumerable
+        set: function(incoming) { return overrider.setRaw(propState, incoming, this); }
     };
 }
 

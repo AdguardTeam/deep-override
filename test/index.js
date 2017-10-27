@@ -122,6 +122,7 @@ suite('AG_defineProperty', function() {
             var value2 = base.test2.a.b;
             assert.equal(value, 1);
             assert.equal(value2, 4);
+            assert.equal(base.test2.propertyIsEnumerable('a'), true);
         });
 
         test('Overriding object literals with non-configurable writable property', function() {
@@ -197,6 +198,8 @@ suite('AG_defineProperty', function() {
             let getCount = setCount = 0;
             assert.equal(test5.a.b.d, 2);
             assert.equal(test5.a.b.c, 2);
+            assert.equal(test5.a.propertyIsEnumerable('b'), true);
+            assert.equal(JSON.parse(JSON.stringify(test5)).a.b.d, 2);
             AG_defineProperty('test5.a.b.d', {
                 get: () => {
                     getCount++;
@@ -208,10 +211,12 @@ suite('AG_defineProperty', function() {
             }, base);
             assert.equal(base.test5.a.b.d, 3);
             assert.equal(getCount, 1);
-            assert.equal(test5.a.b.c, 4);
+            assert.equal(test5.a.b.c, 5);
+            assert.equal(test5.a.propertyIsEnumerable('b'), true);
+            assert.equal(JSON.parse(JSON.stringify(test5)).a.b.d, 3);
             test5.a.b.d = 4;
             assert.equal(test5.a.b.d, 3);
-            assert.equal(getCount, 2);
+            assert.equal(getCount, 3);
             //assert.equal(setCount, 1);
         });
 
