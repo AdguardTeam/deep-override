@@ -217,6 +217,9 @@ clonePropState (propState:readonly<IPropertyState>, owner:IObjectState):IPropert
 descFactory (propState:IPropertyState):PropertyDescriptor {
     // ToDo: enumerability fix
     let overrider = this;
+    // configurable, enumerable properties will follow that of the original descriptor.
+    // See www.ecma-international.org/ecma-262/6.0/#sec-validateandapplypropertydescriptor
+    // for the precise logic.
     return {
         get: function() { return overrider.getRaw(propState, this); },
         set: function(incoming) { return overrider.setRaw(propState, incoming, this); }
