@@ -125,7 +125,7 @@ class ObjectState implements IObjectState {
         this.ownProps = Object.create(null);
     }
     isConcrete():boolean {
-        return typeof this.$raw === 'object';
+        return typeof this.$raw !== 'undefined';
     }
 }
 
@@ -265,7 +265,7 @@ $set(propState:IPropertyState, objState:IObjectState, _this:any):any {
 }
 
 setRaw (propState:IPropertyState, incoming:any, _this:any):any {
-    if (_this !== propState.owner.$raw || typeof incoming !== 'object') {
+    if (_this !== propState.owner.$raw || !DeepOverrideHost.isExpando(incoming)) {
         return this.invokeSetter(propState, incoming, _this);
     } else {
         let objectState = this.getObjectState(incoming);
@@ -292,7 +292,7 @@ applyObjectState (objState:IObjectState, abstractObjectState:readonly<IObjectSta
 }
 
 applyObjectStateRaw (obj, idealObjectState:readonly<IObjectState>) {
-    if (typeof obj !== 'object') { return obj; }
+    if (!DeepOverrideHost.isExpando(obj)) { return obj; }
     let objState = this.getObjectState(obj);
     this.applyObjectState(objState, idealObjectState);
 }
@@ -404,6 +404,13 @@ compareDesc(desc1:PropertyDescriptor, desc2:PropertyDescriptor):boolean {
 static defineProperty = defineProperty;
 static getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 static isExtensible = Object.isExtensible;
+
+static isExpando = (obj:any):boolean => {
+    let type = typeof obj;
+    if (type === 'function') { return true; }
+    if (type === 'object' && obj !== null) { return true; }
+    return false;
+}
 
 /****************************************************************************************/
 

@@ -51,7 +51,7 @@ var ObjectState = (function () {
         this.ownProps = Object.create(null);
     }
     ObjectState.prototype.isConcrete = function () {
-        return typeof this.$raw === 'object';
+        return typeof this.$raw !== 'undefined';
     };
     return ObjectState;
 }());
@@ -177,7 +177,7 @@ var DeepOverrideHost = (function () {
         this.applyObjectState(objState, propState.obj);
     };
     DeepOverrideHost.prototype.setRaw = function (propState, incoming, _this) {
-        if (_this !== propState.owner.$raw || typeof incoming !== 'object') {
+        if (_this !== propState.owner.$raw || !DeepOverrideHost.isExpando(incoming)) {
             return this.invokeSetter(propState, incoming, _this);
         }
         else {
@@ -203,7 +203,7 @@ var DeepOverrideHost = (function () {
         }
     };
     DeepOverrideHost.prototype.applyObjectStateRaw = function (obj, idealObjectState) {
-        if (typeof obj !== 'object') {
+        if (!DeepOverrideHost.isExpando(obj)) {
             return obj;
         }
         var objState = this.getObjectState(obj);
@@ -387,6 +387,16 @@ var DeepOverrideHost = (function () {
     DeepOverrideHost.defineProperty = defineProperty;
     DeepOverrideHost.getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
     DeepOverrideHost.isExtensible = Object.isExtensible;
+    DeepOverrideHost.isExpando = function (obj) {
+        var type = typeof obj;
+        if (type === 'function') {
+            return true;
+        }
+        if (type === 'object' && obj !== null) {
+            return true;
+        }
+        return false;
+    };
     /****************************************************************************************/
     DeepOverrideHost.warn = DEBUG && typeof console !== 'undefined' ? function (msg) {
         console.warn("AG_defineProperty: " + msg);

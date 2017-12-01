@@ -255,6 +255,17 @@ suite('AG_defineProperty', function() {
             assert.equal(base.test, tmp);
             assert.equal(base.test.a, 1);
         });
+
+        test('It should override properties of functions or non-Objects', function() {
+            AG_defineProperty('test.a', { value: 1}, base);
+            base.test = function() { };
+            assert.equal(base.test.a, 1);
+
+            base.test = Object.create(Object.create(null));
+            assert.equal(base.test.a, 1);
+
+            base.test = null; // This should not throw
+        })
     });
 });
 
