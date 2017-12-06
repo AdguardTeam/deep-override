@@ -265,7 +265,54 @@ suite('AG_defineProperty', function() {
             assert.equal(base.test.a, 1);
 
             base.test = null; // This should not throw
-        })
+        });
+
+        test('It should override properties which are already defined in an object\'s prototype', function() {
+            let value = {};
+
+            let hasGetter = {
+                getCount: 0,
+                setCount: 0,
+                get a() {
+                    this.getCount++;
+                    return value;
+                },
+                set a(i) {
+                    this.setCount++;
+                },
+                b: {
+                    c: 1
+                }
+            };
+
+            let ptypeHasGetter = Object.create(hasGetter);
+
+            ptypeHasGetter.getCount = 0;
+            ptypeHasGetter.setCount = 0;
+
+            base.test = ptypeHasGetter;
+            
+            let getCount = 0;
+            let setCount = 0;
+            AG_defineProperty('test.a.b', {
+                get: function() {
+                    getCount++;
+                    return 1;
+                },
+                set: function() {
+                    setCount++;
+                }
+            }, base);
+
+            assert.equal(base.test.a.b, 1);
+            assert.equal(value.b, 1);
+            assert.equal(base.test.getCount, 1);
+
+            base.test.a = 1;
+            assert.equal(base.test.setCount, 1);
+            base.test.a = function() {};
+            assert.equal(base.test.setCount, 2);
+        });
     });
 });
 

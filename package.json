@@ -1,6 +1,6 @@
 {
   "name": "deep-override",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": "index.js",
   "license": "MIT",
   "scripts": {
@@ -20,7 +20,7 @@
     "mocha": "^4.0.1",
     "replace-in-file": "^3.0.0-beta.2",
     "rewire": "^2.5.2",
-    "tsickle": "^0.24.1",
-    "typescript": "2.4.2"
+    "tsickle": "^0.25.5",
+    "typescript": "2.5.3"
   }
 }

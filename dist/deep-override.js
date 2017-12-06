@@ -8,7 +8,7 @@ if (typeof WeakMap == 'function') {
 }
 else {
     var counter_1 = 0;
-    wm = (function () {
+    wm = /** @class */ (function () {
         function WM() {
             this.$name = (counter_1 += Math.random()).toString();
         }
@@ -45,7 +45,7 @@ else {
 /****************************************************************************************/
 // Defining classes as static properties of a class does not work well with tsickle,
 // due to its implicit type.
-var ObjectState = (function () {
+var ObjectState = /** @class */ (function () {
     function ObjectState($raw) {
         this.$raw = $raw;
         this.ownProps = Object.create(null);
@@ -55,7 +55,7 @@ var ObjectState = (function () {
     };
     return ObjectState;
 }());
-var PropertyState = (function () {
+var PropertyState = /** @class */ (function () {
     function PropertyState(owner, prop, obj, providedDesc) {
         this.owner = owner;
         this.prop = prop;
@@ -69,7 +69,7 @@ var PropertyState = (function () {
 }());
 /****************************************************************************************/
 /****************************************************************************************/
-var DeepOverrideHost = (function () {
+var DeepOverrideHost = /** @class */ (function () {
     /****************************************************************************************/
     function DeepOverrideHost() {
         this.objectStateMap = new wm();
@@ -125,7 +125,7 @@ var DeepOverrideHost = (function () {
         // See www.ecma-international.org/ecma-262/6.0/#sec-validateandapplypropertydescriptor
         // for the precise logic.
         return {
-            get: function () { return overrider.getRaw(propState, this); },
+            get: function () { return overrider.$get(propState, this); },
             set: function (incoming) { return overrider.setRaw(propState, incoming, this); },
             enumerable: propState.desc ? propState.desc.enumerable : true
         };
@@ -136,31 +136,11 @@ var DeepOverrideHost = (function () {
      * @param propState propState(X.Y)
      */
     DeepOverrideHost.prototype.$get = function (propState, _this) {
-        var desc = propState.desc;
-        if (!desc) {
-            return undefined;
+        var value = this.invokeGetter(propState, _this);
+        if (_this === propState.owner.$raw) {
+            this.applyObjectStateRaw(value, propState.obj);
         }
-        var val; // A raw object to be returned from the getter.
-        if (this.isDataDescriptor(desc)) {
-            val = desc.value;
-        }
-        else if (!desc.get) {
-            return undefined;
-        }
-        else {
-            val = desc.get.call(_this);
-        }
-        this.applyObjectStateRaw(val, propState.obj);
-        return val;
-    };
-    DeepOverrideHost.prototype.getRaw = function (propState, _this) {
-        if (_this !== propState.owner.$raw) {
-            if (propState.desc && propState.desc.get) {
-                return propState.desc.get.call(_this);
-            }
-            return undefined;
-        }
-        return this.$get(propState, _this);
+        return value;
     };
     /**
      * Set operation, X.Y = Z
@@ -257,7 +237,7 @@ var DeepOverrideHost = (function () {
             enumerable: true
         };
     };
-    DeepOverrideHost.prototype.invokeSetterRaw = function (owner, desc, incoming) {
+    DeepOverrideHost.prototype.invokeSetterRaw = function (receiver, desc, incoming) {
         if (this.isDataDescriptor(desc)) {
             if (desc.writable) {
                 desc.value = incoming;
@@ -270,11 +250,24 @@ var DeepOverrideHost = (function () {
         if (!desc.set) {
             return false;
         }
-        return desc.set.call(owner, incoming);
+        return desc.set.call(receiver, incoming);
     };
     DeepOverrideHost.prototype.invokeSetter = function (propState, incoming, _this) {
         var desc = propState.desc;
         if (!desc) {
+            /**
+             * We have defined the property on `propState.owner.$raw`, as per the contract.
+             * If a property setter is present in one of its prototype object, we should
+             * invoke it, otherwise we should define a new data property on the owner.
+             * @todo link an ECMAScript specification
+             */
+            var ownerPType = DeepOverrideHost.getPrototypeOf(propState.owner.$raw);
+            if (ownerPType !== null) {
+                var setterOnPType = DeepOverrideHost.lookupSetter.call(ownerPType, propState.prop);
+                if (setterOnPType) {
+                    return setterOnPType.call(_this, incoming);
+                }
+            }
             if (!DeepOverrideHost.isExtensible(propState.owner.$raw)) {
                 DeepOverrideHost.warnNonExtensibleProperty(propState.prop);
                 return false;
@@ -283,6 +276,28 @@ var DeepOverrideHost = (function () {
             return true;
         }
         return this.invokeSetterRaw(_this, desc, incoming);
+    };
+    DeepOverrideHost.prototype.invokeGetterRaw = function (receiver, desc) {
+        if (this.isDataDescriptor(desc)) {
+            return desc.value;
+        }
+        if (desc.get) {
+            return desc.get.call(receiver);
+        }
+    };
+    DeepOverrideHost.prototype.invokeGetter = function (propState, _this) {
+        var desc = propState.desc;
+        if (!desc) {
+            var ownerPType = DeepOverrideHost.getPrototypeOf(propState.owner.$raw);
+            if (ownerPType !== null) {
+                var getter = DeepOverrideHost.lookupGetter.call(ownerPType, propState.prop);
+                if (getter) {
+                    return getter.call(_this);
+                }
+            }
+            return;
+        }
+        return this.invokeGetterRaw(_this, desc);
     };
     /****************************************************************************************/
     DeepOverrideHost.prototype.isDataDescriptor = function (desc) {
@@ -387,6 +402,26 @@ var DeepOverrideHost = (function () {
     DeepOverrideHost.defineProperty = defineProperty;
     DeepOverrideHost.getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
     DeepOverrideHost.isExtensible = Object.isExtensible;
+    DeepOverrideHost.getPrototypeOf = Object.getPrototypeOf;
+    DeepOverrideHost.hasOwnProperty = Object.prototype.hasOwnProperty;
+    // Object#__lookupGetter__ is not supported on IE10 and lower.
+    DeepOverrideHost.lookupGetter = Object.prototype.__lookupGetter__ || function (prop) {
+        var desc = DeepOverrideHost.lookupDescriptor(this, prop);
+        return desc && desc.get ? desc.get : undefined;
+    };
+    DeepOverrideHost.lookupSetter = Object.prototype.__lookupSetter__ || function (prop) {
+        var desc = DeepOverrideHost.lookupDescriptor(this, prop);
+        return desc && desc.set ? desc.set : undefined;
+    };
+    DeepOverrideHost.lookupDescriptor = function (obj, prop) {
+        if (!(prop in obj)) {
+            return;
+        }
+        while (!obj.hasOwnProperty(prop)) {
+            obj = DeepOverrideHost.getPrototypeOf(obj);
+        }
+        return DeepOverrideHost.getOwnPropertyDescriptor(obj, prop);
+    };
     DeepOverrideHost.isExpando = function (obj) {
         var type = typeof obj;
         if (type === 'function') {
