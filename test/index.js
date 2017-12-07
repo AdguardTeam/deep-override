@@ -314,7 +314,70 @@ suite('AG_defineProperty', function() {
             assert.equal(base.test.setCount, 2);
         });
     });
+    suite('Extended property descriptors', function() {
+        test('before callbacks should be called with expected parameters', function() {
+            let toBeMutatedPType;
+
+            base.a = Object.create(Object.create({
+                b: {
+                    c: Object.create((toBeMutatedPType = Object.create(Object.create({
+                        get d() {
+                            return 0;
+                        },
+                        set d(i) {
+                            
+                        }
+                    }))))
+                }
+            }));
+
+            assert.equal(base.a.b.c.d, 0);
+
+            AG_defineProperty('a.b.c.d', {
+                beforeGet: function(target) {
+                    this.latestOp = 'get';
+                    this.latestTarget = target;
+                    this.latestIncoming = undefined;
+                },
+                beforeSet: function(incoming, target) {
+                    this.latestOp = 'set';
+                    this.latestTarget = target;
+                    this.latestIncoming = incoming;
+                }
+            }, base);
+
+            base.a.b.c.d = 1;
+            assert.equal(base.a.b.c.latestOp, 'set');
+            assert.equal(base.a.b.c.latestTarget, base.a.b.c);
+            assert.equal(base.a.b.c.latestIncoming, 1);
+
+            assert.equal(base.a.b.c.d, 0);
+            assert.equal(base.a.b.c.latestOp, 'get');
+            assert.equal(base.a.b.c.latestTarget, base.a.b.c);
+
+            let tmp = base.a.b.c.d = Object.create(null);
+            assert.equal(base.a.b.c.latestOp, 'set');
+            assert.equal(base.a.b.c.latestTarget, base.a.b.c);
+            assert.equal(base.a.b.c.latestIncoming, tmp);
+
+            let setCount = 0;
+            Object.defineProperty(toBeMutatedPType, 'd', {
+                get: function() {
+                    return 2;
+                },
+                set: function() {
+                    setCount++;
+                }
+            });
+
+            assert.equal(base.a.b.c.d, 2);
+
+            base.a.b.c.d = 2;
+            assert.equal(setCount, 1);
+        })
+    });
 });
+
 
 if (typeof DeepOverrideHost !== 'undefined') {
     suite('DeepOverrideHost', function() {

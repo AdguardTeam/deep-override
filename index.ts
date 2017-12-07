@@ -77,6 +77,13 @@ if (typeof WeakMap == 'function') {
 }
 
 /****************************************************************************************/
+
+declare interface ExtendedPropertyDescriptor extends PropertyDescriptor {
+  beforeGet?: (target?: object) => void
+  beforeSet?: (incomming?: object, target?: object) => void
+}
+
+/****************************************************************************************/
 /****************************************************************************************
 
   It is an obligation of each methods to make sure that following preconditions are met:
@@ -116,7 +123,7 @@ interface IPropertyState {
   /**
    * Descriptors provided with AG_defineProperty call.
    */
-  providedDesc?: PropertyDescriptor
+  providedDesc?: readonly<ExtendedPropertyDescriptor>
   isConcrete(): boolean
 }
 
@@ -141,7 +148,7 @@ class PropertyState implements IPropertyState {
     public readonly owner: IObjectState,
     public readonly prop: string,
     public readonly obj: IObjectState,
-    public providedDesc?: PropertyDescriptor
+    public providedDesc?: readonly<ExtendedPropertyDescriptor>
   ) { }
   isConcrete(): boolean {
     return this.owner.isConcrete();
@@ -153,12 +160,12 @@ class PropertyState implements IPropertyState {
 
 class DeepOverrideHost {
 
-/****************************************************************************************/
+  /****************************************************************************************/
 
   static readonly ObjectState = ObjectState
   static readonly PropertyState = PropertyState
 
-/****************************************************************************************/
+  /****************************************************************************************/
 
   cloneObjectState(objState: readonly<IObjectState>): IObjectState {
     let cloned = new DeepOverrideHost.ObjectState(objState.$raw);
@@ -173,7 +180,7 @@ class DeepOverrideHost {
       owner,
       propState.prop,
       this.cloneObjectState(propState.obj),
-      this.cloneDesc(propState.providedDesc)
+      propState.providedDesc
     );
 
     owner.ownProps[cloned.prop] = cloned;
@@ -182,7 +189,7 @@ class DeepOverrideHost {
       let origDesc = DeepOverrideHost.getOwnPropertyDescriptor(owner.$raw, cloned.prop);
       cloned.desc = origDesc;
 
-      let newDesc = cloned.providedDesc || this.descFactory(cloned);
+      let newDesc = this.cloneDesc(cloned.providedDesc) || this.descFactory(cloned);
 
       if (!origDesc || origDesc.configurable) {
         DeepOverrideHost.defineProperty(owner.$raw, cloned.prop, newDesc);
@@ -198,21 +205,21 @@ class DeepOverrideHost {
            */
           this.applyObjectStateRaw(origDesc.value, propState.obj);
         }
-      } else if (origDesc && this.isDataDescriptor(origDesc)) {
-        /**
-         * In this case, we do not redefine the current property,
-         * and proceed directly to override the value.
-         */
-        this.applyObjectStateRaw(origDesc.value, propState.obj);
       } else {
-        DeepOverrideHost.warnNonConfigurableProperty(cloned.prop);
+        /**
+        * In this case, we cannot redefine the current property,
+        * so we proceed directly to override the value.
+        * If it was defined as a getter, we call it once.
+        */
+        let value = owner.$raw![cloned.prop];
+        this.applyObjectStateRaw(value, propState.obj);
       }
     }
 
     return cloned;
   }
 
-/****************************************************************************************/
+  /****************************************************************************************/
 
   descFactory(propState: IPropertyState): PropertyDescriptor {
     // ToDo: enumerability fix
@@ -222,18 +229,22 @@ class DeepOverrideHost {
     // for the precise logic.
     return {
       get: function () { return overrider.$get(propState, this); },
-      set: function (incoming) { return overrider.setRaw(propState, incoming, this); },
+      set: function (incoming) { return overrider.$set(propState, incoming, this); },
       enumerable: propState.desc ? propState.desc.enumerable : true
     };
   }
 
-/****************************************************************************************/
+  /****************************************************************************************/
 
   /**
    * Get operation, X.Y
    * @param propState propState(X.Y)
    */
   $get(propState: IPropertyState, _this: any): any {
+    let providedDesc = propState.providedDesc;
+    if (providedDesc && providedDesc.beforeGet) {
+      (<Function>providedDesc.beforeGet).call(_this, propState.owner.$raw);
+    }
     let value = this.invokeGetter(propState, _this);
     if (_this === propState.owner.$raw) {
       this.applyObjectStateRaw(value, propState.obj);
@@ -244,29 +255,31 @@ class DeepOverrideHost {
   /**
    * Set operation, X.Y = Z
    * @param propState propState(X.Y)
-   * @param objState objState(Z)
+   * @param incoming Z
    */
-  $set(propState: IPropertyState, objState: IObjectState, _this: any): any {
+  $set(propState: IPropertyState, incoming: any, _this: any): any {
+    if (_this !== propState.owner.$raw) {
+      return this.invokeSetter(propState, incoming, _this);
+    }
+    if (propState.providedDesc && propState.providedDesc.beforeSet) {
+      incoming = (<Function>propState.providedDesc.beforeSet).call(_this, incoming, _this);
+    }
+
     // Quick path for X.Y = X.Y.
     let desc = propState.desc;
-    if (desc && this.isDataDescriptor(desc) && desc.value === objState.$raw) {
+    if (desc && this.isDataDescriptor(desc) && desc.value === incoming) {
       return true;
     }
-
-    this.invokeSetter(propState, objState.$raw, _this);
-    this.applyObjectState(objState, propState.obj);
-  }
-
-  setRaw(propState: IPropertyState, incoming: any, _this: any): any {
-    if (_this !== propState.owner.$raw || !DeepOverrideHost.isExpando(incoming)) {
-      return this.invokeSetter(propState, incoming, _this);
-    } else {
-      let objectState = this.getObjectState(incoming);
-      return this.$set(propState, objectState, _this);
+    let ret = this.invokeSetter(propState, incoming, _this);
+    if (!DeepOverrideHost.isExpando(incoming)) {
+      return ret;
     }
+    let objState = this.getObjectState(incoming);
+    this.applyObjectState(objState, propState.obj);
+    return ret;
   }
 
-/****************************************************************************************/
+  /****************************************************************************************/
 
   /**
    * @param abstractObjectState ***Beware*** This argument should not be mutated.
@@ -296,7 +309,7 @@ class DeepOverrideHost {
   applyProp(propState: IPropertyState, abstractPropertyState: readonly<IPropertyState>): void {
     if (abstractPropertyState.providedDesc) {
       if (propState.providedDesc) {
-        if (this.compareDesc(<PropertyDescriptor>abstractPropertyState.providedDesc, propState.providedDesc)) {
+        if (abstractPropertyState.providedDesc === propState.providedDesc) {
           // Intentionally blank
         } else {
           if (propState.isConcrete()) {
@@ -326,7 +339,7 @@ class DeepOverrideHost {
     }
   }
 
-/****************************************************************************************/
+  /****************************************************************************************/
 
   getPropertyWriteDescriptor(value: any): PropertyDescriptor {
     return {
@@ -376,27 +389,30 @@ class DeepOverrideHost {
     return this.invokeSetterRaw(_this, desc, incoming);
   }
 
-  invokeGetterRaw(receiver:object, desc:PropertyDescriptor) {
+  invokeGetterRaw(receiver: object, desc: PropertyDescriptor) {
     if (this.isDataDescriptor(desc)) {
       return desc.value;
     }
     if (desc.get) { return desc.get.call(receiver); }
   }
 
-  invokeGetter(propState:IPropertyState, _this) {
+  invokeGetter(propState: IPropertyState, _this) {
     let desc = propState.desc;
     if (!desc) {
-      let ownerPType = DeepOverrideHost.getPrototypeOf(propState.owner.$raw);
+      const owner = propState.owner.$raw!;
+      if (!(propState.prop in owner)) { return; }
+      let ownerPType = DeepOverrideHost.getPrototypeOf(owner);
       if (ownerPType !== null) {
         let getter = DeepOverrideHost.lookupGetter.call(ownerPType, propState.prop);
         if (getter) { return getter.call(_this); }
+        else { return ownerPType[propState.prop]; }
       }
       return;
     }
     return this.invokeGetterRaw(_this, desc);
   }
 
-/****************************************************************************************/
+  /****************************************************************************************/
 
   isDataDescriptor(desc: PropertyDescriptor): boolean {
     return typeof desc.writable !== 'undefined'
@@ -405,26 +421,21 @@ class DeepOverrideHost {
   static readonly DESC_KEYS = 'value,get,set,writable,configurable,enumerable'.split(',');
   static readonly DESC_KEYS_LENGTH = 6; /* DeepOverrideHost.DESC_KEYS.length */
 
-  cloneDesc(desc: readonly<PropertyDescriptor> | undefined): PropertyDescriptor | undefined {
+  cloneDesc(desc: readonly<ExtendedPropertyDescriptor> | undefined): PropertyDescriptor | undefined {
     if (!desc) { return undefined; }
     let cloned = {};
     let i = DeepOverrideHost.DESC_KEYS_LENGTH;
+    let anyKeyIsPresent = false;
     while (i--) {
       let key = DeepOverrideHost.DESC_KEYS[i];
       if (desc.hasOwnProperty(key)) {
+        anyKeyIsPresent = true;
         cloned[key] = desc[key];
       }
     }
-    return cloned;
-  }
-
-  compareDesc(desc1: PropertyDescriptor, desc2: PropertyDescriptor): boolean {
-    let i = DeepOverrideHost.DESC_KEYS_LENGTH;
-    while (i--) {
-      let key = DeepOverrideHost.DESC_KEYS[i];
-      if (desc1[key] !== desc2[key]) { return false; }
-    }
-    return true;
+    // Even if no key is present, extended propertyes (beforeGet, beforeSet)
+    // may present.
+    return anyKeyIsPresent ? cloned : undefined;
   }
 
   static defineProperty = defineProperty;
@@ -458,7 +469,7 @@ class DeepOverrideHost {
     return false;
   }
 
-/****************************************************************************************/
+  /****************************************************************************************/
 
   static warn: (msg: string) => void = DEBUG && typeof console !== 'undefined' ? (msg: string): void => {
     console.warn(`AG_defineProperty: ${msg}`);
@@ -483,7 +494,7 @@ class DeepOverrideHost {
     DeepOverrideHost.warn(`unresolvable circular referrence with property ${prop}.`);
   }
 
-/****************************************************************************************/
+  /****************************************************************************************/
 
   private objectStateMap: IWeakMap<object, IObjectState>
 
@@ -496,13 +507,13 @@ class DeepOverrideHost {
     return state;
   }
 
-/****************************************************************************************/
+  /****************************************************************************************/
 
   constructor() {
     this.objectStateMap = new wm<object, IObjectState>();
   }
 
-/****************************************************************************************/
+  /****************************************************************************************/
 
   private splitter: RegExp;
 
@@ -543,7 +554,7 @@ class DeepOverrideHost {
     return propData!;
   }
 
-  addProperty(path: string, descriptor: PropertyDescriptor, base?: object) {
+  addProperty(path: string, descriptor: ExtendedPropertyDescriptor, base?: object) {
     base = base || window;
 
     let baseState = new DeepOverrideHost.ObjectState();
@@ -564,7 +575,7 @@ let overrider: DeepOverrideHost;
 
 declare var _return;
 
-_return = (path: string, descriptor: PropertyDescriptor, base?: object): void => {
+_return = (path: string, descriptor: ExtendedPropertyDescriptor, base?: object): void => {
   if (!overrider) { overrider = new DeepOverrideHost(); }
   overrider.addProperty(path, descriptor, base);
 }

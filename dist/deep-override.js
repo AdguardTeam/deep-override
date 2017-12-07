@@ -83,12 +83,12 @@ var DeepOverrideHost = /** @class */ (function () {
         return cloned;
     };
     DeepOverrideHost.prototype.clonePropState = function (propState, owner) {
-        var cloned = new DeepOverrideHost.PropertyState(owner, propState.prop, this.cloneObjectState(propState.obj), this.cloneDesc(propState.providedDesc));
+        var cloned = new DeepOverrideHost.PropertyState(owner, propState.prop, this.cloneObjectState(propState.obj), propState.providedDesc);
         owner.ownProps[cloned.prop] = cloned;
         if (owner.isConcrete()) {
             var origDesc = DeepOverrideHost.getOwnPropertyDescriptor(owner.$raw, cloned.prop);
             cloned.desc = origDesc;
-            var newDesc = cloned.providedDesc || this.descFactory(cloned);
+            var newDesc = this.cloneDesc(cloned.providedDesc) || this.descFactory(cloned);
             if (!origDesc || origDesc.configurable) {
                 DeepOverrideHost.defineProperty(owner.$raw, cloned.prop, newDesc);
                 /**
@@ -104,15 +104,14 @@ var DeepOverrideHost = /** @class */ (function () {
                     this.applyObjectStateRaw(origDesc.value, propState.obj);
                 }
             }
-            else if (origDesc && this.isDataDescriptor(origDesc)) {
-                /**
-                 * In this case, we do not redefine the current property,
-                 * and proceed directly to override the value.
-                 */
-                this.applyObjectStateRaw(origDesc.value, propState.obj);
-            }
             else {
-                DeepOverrideHost.warnNonConfigurableProperty(cloned.prop);
+                /**
+                * In this case, we cannot redefine the current property,
+                * so we proceed directly to override the value.
+                * If it was defined as a getter, we call it once.
+                */
+                var value = owner.$raw[cloned.prop];
+                this.applyObjectStateRaw(value, propState.obj);
             }
         }
         return cloned;
@@ -126,7 +125,7 @@ var DeepOverrideHost = /** @class */ (function () {
         // for the precise logic.
         return {
             get: function () { return overrider.$get(propState, this); },
-            set: function (incoming) { return overrider.setRaw(propState, incoming, this); },
+            set: function (incoming) { return overrider.$set(propState, incoming, this); },
             enumerable: propState.desc ? propState.desc.enumerable : true
         };
     };
@@ -136,6 +135,10 @@ var DeepOverrideHost = /** @class */ (function () {
      * @param propState propState(X.Y)
      */
     DeepOverrideHost.prototype.$get = function (propState, _this) {
+        var providedDesc = propState.providedDesc;
+        if (providedDesc && providedDesc.beforeGet) {
+            providedDesc.beforeGet.call(_this, propState.owner.$raw);
+        }
         var value = this.invokeGetter(propState, _this);
         if (_this === propState.owner.$raw) {
             this.applyObjectStateRaw(value, propState.obj);
@@ -145,25 +148,27 @@ var DeepOverrideHost = /** @class */ (function () {
     /**
      * Set operation, X.Y = Z
      * @param propState propState(X.Y)
-     * @param objState objState(Z)
+     * @param incoming Z
      */
-    DeepOverrideHost.prototype.$set = function (propState, objState, _this) {
-        // Quick path for X.Y = X.Y.
-        var desc = propState.desc;
-        if (desc && this.isDataDescriptor(desc) && desc.value === objState.$raw) {
-            return true;
-        }
-        this.invokeSetter(propState, objState.$raw, _this);
-        this.applyObjectState(objState, propState.obj);
-    };
-    DeepOverrideHost.prototype.setRaw = function (propState, incoming, _this) {
-        if (_this !== propState.owner.$raw || !DeepOverrideHost.isExpando(incoming)) {
+    DeepOverrideHost.prototype.$set = function (propState, incoming, _this) {
+        if (_this !== propState.owner.$raw) {
             return this.invokeSetter(propState, incoming, _this);
         }
-        else {
-            var objectState = this.getObjectState(incoming);
-            return this.$set(propState, objectState, _this);
+        if (propState.providedDesc && propState.providedDesc.beforeSet) {
+            incoming = propState.providedDesc.beforeSet.call(_this, incoming, _this);
         }
+        // Quick path for X.Y = X.Y.
+        var desc = propState.desc;
+        if (desc && this.isDataDescriptor(desc) && desc.value === incoming) {
+            return true;
+        }
+        var ret = this.invokeSetter(propState, incoming, _this);
+        if (!DeepOverrideHost.isExpando(incoming)) {
+            return ret;
+        }
+        var objState = this.getObjectState(incoming);
+        this.applyObjectState(objState, propState.obj);
+        return ret;
     };
     /****************************************************************************************/
     /**
@@ -195,7 +200,7 @@ var DeepOverrideHost = /** @class */ (function () {
     DeepOverrideHost.prototype.applyProp = function (propState, abstractPropertyState) {
         if (abstractPropertyState.providedDesc) {
             if (propState.providedDesc) {
-                if (this.compareDesc(abstractPropertyState.providedDesc, propState.providedDesc)) {
+                if (abstractPropertyState.providedDesc === propState.providedDesc) {
                     // Intentionally blank
                 }
                 else {
@@ -288,11 +293,18 @@ var DeepOverrideHost = /** @class */ (function () {
     DeepOverrideHost.prototype.invokeGetter = function (propState, _this) {
         var desc = propState.desc;
         if (!desc) {
-            var ownerPType = DeepOverrideHost.getPrototypeOf(propState.owner.$raw);
+            var owner = propState.owner.$raw;
+            if (!(propState.prop in owner)) {
+                return;
+            }
+            var ownerPType = DeepOverrideHost.getPrototypeOf(owner);
             if (ownerPType !== null) {
                 var getter = DeepOverrideHost.lookupGetter.call(ownerPType, propState.prop);
                 if (getter) {
                     return getter.call(_this);
+                }
+                else {
+                    return ownerPType[propState.prop];
                 }
             }
             return;
@@ -309,23 +321,17 @@ var DeepOverrideHost = /** @class */ (function () {
         }
         var cloned = {};
         var i = DeepOverrideHost.DESC_KEYS_LENGTH;
+        var anyKeyIsPresent = false;
         while (i--) {
             var key = DeepOverrideHost.DESC_KEYS[i];
             if (desc.hasOwnProperty(key)) {
+                anyKeyIsPresent = true;
                 cloned[key] = desc[key];
             }
         }
-        return cloned;
-    };
-    DeepOverrideHost.prototype.compareDesc = function (desc1, desc2) {
-        var i = DeepOverrideHost.DESC_KEYS_LENGTH;
-        while (i--) {
-            var key = DeepOverrideHost.DESC_KEYS[i];
-            if (desc1[key] !== desc2[key]) {
-                return false;
-            }
-        }
-        return true;
+        // Even if no key is present, extended propertyes (beforeGet, beforeSet)
+        // may present.
+        return anyKeyIsPresent ? cloned : undefined;
     };
     DeepOverrideHost.warnNonConfigurableProperty = function (prop) {
         DeepOverrideHost.warn("cannot redefine non-configurable property " + prop + ".");
