@@ -17,7 +17,11 @@ If a property was already defined when `AG_defineProperty` call was made, it wil
 ### Overriding non-configurable properties
 If such a property was non-configurable, we cannot re-define it, and instead it will try to directly mutate the property's value. If it was an accessor property, `AG_defineProperty` will invoke the getter _once_ in order to obtain property's value.
 
-If a property is defined after `AG_defineProperty` call with `Object.defineProperty`, such operation will likely fail, since `AG_defineProperty` attaches a non-configurable property descriptor (This limitation can be overcomed with ES6 `Proxy`, but this approach has its own limitations).
+If a property is defined after `AG_defineProperty` call with `Object.defineProperty`, such operation is likely to fail, since `AG_defineProperty` attaches a non-configurable property descriptor (This limitation can be overcomed with ES6 `Proxy`, but this approach has its own limitations).
+
+### Multiple calls to a single object
+
+Defining properties on a single object multiple times will succeed as long as it does not attempt to define a descriptor provided by you with `configurable: false` more than once on a single object.
 
 ## Access side-effect descriptors
 
@@ -39,9 +43,7 @@ AG_defineProperty('onerror', {
             console.error(evt);
             i.apply(this, arguments);
         }
-    },
-    enumerable: true,
-    configurable: true
+    }
 });
 ```
 

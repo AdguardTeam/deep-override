@@ -175,6 +175,10 @@ class DeepOverrideHost {
     return cloned;
   }
 
+  /**
+   * @todo Write property merge tests for access side-effect descriptors
+   * {@link https://github.com/seanl-adg/deep-override/issues/4}
+   */
   clonePropState(propState: readonly<IPropertyState>, owner: IObjectState): IPropertyState {
     let cloned = new DeepOverrideHost.PropertyState(
       owner,
@@ -189,6 +193,7 @@ class DeepOverrideHost {
       let origDesc = DeepOverrideHost.getOwnPropertyDescriptor(owner.$raw, cloned.prop);
       cloned.desc = origDesc;
 
+      // If it has a providedDesc, it should apply it.
       let newDesc = this.cloneDesc(cloned.providedDesc) || this.descFactory(cloned);
 
       if (!origDesc || origDesc.configurable) {
