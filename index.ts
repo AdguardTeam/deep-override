@@ -193,7 +193,12 @@ class DeepOverrideHost {
       let origDesc = DeepOverrideHost.getOwnPropertyDescriptor(owner.$raw, cloned.prop);
       cloned.desc = origDesc;
 
-      // If it has a providedDesc, it should apply it.
+      /**
+       * @todo This should be a separate method which takes account of `generic` properties
+       * of `providedDesc`. For now, we can simply forbid `generic` properties on
+       * access side-effect descriptors.
+       * {@link https://github.com/seanl-adg/deep-override/issues/5}
+       */
       let newDesc = this.cloneDesc(cloned.providedDesc) || this.descFactory(cloned);
 
       if (!origDesc || origDesc.configurable) {
