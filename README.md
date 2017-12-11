@@ -1,14 +1,51 @@
-## About
+# About
 
 Experimental function to transparently override nested JS objects.
 
-Makes use of ES6 [Proxy](https://developer.mozilla.org/en/docs/Web/JavaScript/Reference/Global_Objects/Proxy).
+# How to use it
 
-Does not leave messy property descriptors behind.
+```
+AG_defineProperty(path_to_the_property:string, descriptor:ExtendedPropertyDescriptor, base?:object):void
+```
+In short, whenever a nested property `path_to_the_property` of an object `base` (defaults to `window`) _can be_ accessed, it will _already_ have a property descriptor provided by you with `AG_defineProperty` call.
 
-(Todo) falls back to `Object.defineProperty` when `Proxy` is unavailable.
+## When it works
 
-## How to build
+`AG_defineProperty` works by defining getters and setters on objects in the nested property.
+If a property was already defined when `AG_defineProperty` call was made, it will try to re-define property descriptors with getters and setters, keeping the original value.
+
+### Overriding non-configurable properties
+If such a property was non-configurable, we cannot re-define it, and instead it will try to directly mutate the property's value. If it was an accessor property, `AG_defineProperty` will invoke the getter _once_ in order to obtain property's value.
+
+If a property is defined after `AG_defineProperty` call with `Object.defineProperty`, such operation will likely fail, since `AG_defineProperty` attaches a non-configurable property descriptor (This limitation can be overcomed with ES6 `Proxy`, but this approach has its own limitations).
+
+## Access side-effect descriptors
+
+`AG_defineProperty` supports _Access side-effect descriptors_, as an extension of ECMAScript Property descriptors.
+
+Recall that a property descriptor is an [accessor descriptor](https://tc39.github.io/ecma262/#sec-isaccessordescriptor) if it owns either a property `get` or `set`, and a [data descriptor](https://tc39.github.io/ecma262/#sec-isdatadescriptor) if it owns eiter a property `value` or `writable`, and a [generic descriptor](https://tc39.github.io/ecma262/#sec-isgenericdescriptor) otherwise.
+
+A property descriptor is an _access side-effect descriptor_ if it owns either a property `beforeGet` or `beforeSet`. It can have additionally `configurable`, `enumerable` properties. Those callbacks will be called with a receiver of the getter/setter when a native getter/setter
+### Example
+
+```
+AG_defineProperty('onerror', {
+    beforeGet: function() {
+        console.log('retrieving global error event handler');
+    },
+    beforeSet: function(i) {
+        console.log('setting global error event handler');
+        return function wrapper(evt) {
+            console.error(evt);
+            i.apply(this, arguments);
+        }
+    },
+    enumerable: true,
+    configurable: true
+});
+```
+
+# How to build
 
 Install dependencies by running:
 ```
