@@ -29,7 +29,7 @@ Defining properties on a single object multiple times will succeed as long as it
 
 Recall that a property descriptor is an [accessor descriptor](https://tc39.github.io/ecma262/#sec-isaccessordescriptor) if it owns either a property `get` or `set`, and a [data descriptor](https://tc39.github.io/ecma262/#sec-isdatadescriptor) if it owns eiter a property `value` or `writable`, and a [generic descriptor](https://tc39.github.io/ecma262/#sec-isgenericdescriptor) otherwise.
 
-A property descriptor is an _access side-effect descriptor_ if it owns either a property `beforeGet` or `beforeSet`. It can have additionally `configurable`, `enumerable` properties. Those callbacks are called just before the original getter/setter, with some arguments: `beforeGet` is called with an additional argument of the original owner of the property, and `beforeSet` is called with the incoming value and the original owner of the property. In addition, a value returned from `beforeSet` is fed to the original setter.
+A property descriptor is an _access side-effect descriptor_ if it owns either a property `beforeGet` or `beforeSet`. It can have additionally `configurable`, `enumerable` properties. Those callbacks are called just before the original getter/setter, with some arguments: `beforeGet` is called with the original owner of the property, and `beforeSet` is called with the incoming value and the original owner of the property. In addition, a value returned from `beforeSet` is fed to the original setter.
 
 ### Example
 
