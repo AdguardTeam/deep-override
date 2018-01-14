@@ -256,7 +256,7 @@ class DeepOverrideHost {
       (<Function>providedDesc.beforeGet).call(_this, propState.owner.$raw);
     }
     let value = this.invokeGetter(propState, _this);
-    if (_this === propState.owner.$raw) {
+    if (_this === propState.owner.$raw || propState.owner.$raw!.isPrototypeOf(_this)) {
       this.applyObjectStateRaw(value, propState.obj);
     }
     return value;

@@ -111,7 +111,21 @@ suite('AG_defineProperty', function() {
             //assert.equal(setCount2, 1);
             assert.equal(test6.a.c, 1);
             assert.equal(getCount2, 1);
-        })
+        });
+
+        test('Shadowing class instance properties', function() {
+            AG_defineProperty('A.prototype.b.c', {
+                get: function() {
+                    return false;
+                },
+                set: function() { }
+            }, base);
+            base.A = class { };
+            base.a = new base.A();
+            base.a.b = { c: true };
+
+            assert.equal(base.a.b.c, false);
+        });
     });
 
     suite('Overriding existing objects', function() {
