@@ -114,17 +114,23 @@ suite('AG_defineProperty', function() {
         });
 
         test('Shadowing class instance properties', function() {
+            let getCount = setCount = 0;
             AG_defineProperty('A.prototype.b.c', {
                 get: function() {
+                    getCount++;
                     return false;
                 },
-                set: function() { }
+                set: function() {
+                    setCount++;
+                }
             }, base);
             base.A = class { };
             base.a = new base.A();
-            base.a.b = { c: true };
-
+            base.a.b = { c: true }; // This implicitly invokes the setter.
+            base.a.b.c = true;
             assert.equal(base.a.b.c, false);
+            assert.equal(getCount, 1);
+            assert.equal(setCount, 2);
         });
     });
 

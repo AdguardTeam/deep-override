@@ -256,7 +256,7 @@ class DeepOverrideHost {
       (<Function>providedDesc.beforeGet).call(_this, propState.owner.$raw);
     }
     let value = this.invokeGetter(propState, _this);
-    if (_this === propState.owner.$raw || propState.owner.$raw!.isPrototypeOf(_this)) {
+    if (_this === propState.owner.$raw || DeepOverrideHost.isPrototypeOf.call(propState.owner.$raw, _this)) {
       this.applyObjectStateRaw(value, propState.obj);
     }
     return value;
@@ -268,7 +268,7 @@ class DeepOverrideHost {
    * @param incoming Z
    */
   $set(propState: IPropertyState, incoming: any, _this: any): any {
-    if (_this !== propState.owner.$raw) {
+    if (_this !== propState.owner.$raw && !DeepOverrideHost.isPrototypeOf.call(propState.owner.$raw, _this)) {
       return this.invokeSetter(propState, incoming, _this);
     }
     if (propState.providedDesc && propState.providedDesc.beforeSet) {
@@ -438,7 +438,7 @@ class DeepOverrideHost {
     let anyKeyIsPresent = false;
     while (i--) {
       let key = DeepOverrideHost.DESC_KEYS[i];
-      if (desc.hasOwnProperty(key)) {
+      if (DeepOverrideHost.hasOwnProperty.call(desc, key)) {
         anyKeyIsPresent = true;
         cloned[key] = desc[key];
       }
@@ -454,6 +454,7 @@ class DeepOverrideHost {
   static getPrototypeOf = Object.getPrototypeOf;
 
   static hasOwnProperty = Object.prototype.hasOwnProperty;
+  static isPrototypeOf = Object.prototype.isPrototypeOf;
 
   // Object#__lookupGetter__ is not supported on IE10 and lower.
   static lookupGetter = Object.prototype.__lookupGetter__ || function (prop: PropertyKey) {
@@ -466,7 +467,7 @@ class DeepOverrideHost {
   };
   static lookupDescriptor = (obj: object, prop: PropertyKey): PropertyDescriptor | undefined => {
     if (!(prop in obj)) { return; }
-    while (!obj.hasOwnProperty(prop)) {
+    while (!DeepOverrideHost.hasOwnProperty.call(obj, prop)) {
       obj = DeepOverrideHost.getPrototypeOf(obj);
     }
     return DeepOverrideHost.getOwnPropertyDescriptor(obj, prop);
