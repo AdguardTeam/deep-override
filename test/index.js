@@ -151,7 +151,7 @@ suite('AG_defineProperty', function() {
                 value: { b: 0 },
                 writable: true
             });
-            
+
             let test0 = base.test0 = tmp;
 
             var getCount = setCount = 0;
@@ -166,6 +166,26 @@ suite('AG_defineProperty', function() {
             test0.a.b = 0;
             //assert.equal(setCount, 1);
             assert.equal(test0.a.b, 1);
+        });
+
+        test('Overriding nested properties of non-configurable property', function() {
+            /**
+             * This showcases a bug #12
+             * {@link https://github.com/AdguardTeam/deep-override/issues/12}
+             */
+            Object.defineProperty(base, 'a', {
+                value: {},
+                writable: true,
+                enumerable: true,
+                configurable: false
+            });
+
+            AG_defineProperty('a.b', { value: 1 }, base);
+            AG_defineProperty('a.c.d', { value: 2 }, base);
+
+            base.a.c = {};
+
+            assert.equal(base.a.c.d, 2);
         });
 
         test('It should concatenate recursion', function() {
@@ -250,7 +270,7 @@ suite('AG_defineProperty', function() {
             test.a.b = 3;
             test.c = test.a;
             test.c.d = 4;
-            
+
             assert.equal(test.a.b, 1);
             assert.equal(test.c.d, 2);
             assert.equal(test.a.d, 2);
@@ -264,7 +284,7 @@ suite('AG_defineProperty', function() {
 
         test('Re-assign test', function() {
             AG_defineProperty(`test.a`, { value: 1 }, base);
-            
+
             let test = base.test = {};
             assert.equal(test.a, 1);
 
@@ -311,7 +331,7 @@ suite('AG_defineProperty', function() {
             ptypeHasGetter.setCount = 0;
 
             base.test = ptypeHasGetter;
-            
+
             let getCount = 0;
             let setCount = 0;
             AG_defineProperty('test.a.b', {
@@ -345,7 +365,7 @@ suite('AG_defineProperty', function() {
                             return 0;
                         },
                         set d(i) {
-                            
+
                         }
                     }))))
                 }

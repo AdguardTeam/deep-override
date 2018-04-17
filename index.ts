@@ -133,10 +133,10 @@ interface IPropertyState {
 // due to its implicit type.
 
 class ObjectState implements IObjectState {
-  public ownProps: stringmap<IPropertyState>
-  constructor(public $raw?: object) {
-    this.ownProps = Object.create(null);
-  }
+  public ownProps: stringmap<IPropertyState> = Object.create(null);
+  constructor(
+    public $raw?: object
+  ) { }
   isConcrete(): boolean {
     return typeof this.$raw !== 'undefined';
   }
@@ -167,48 +167,51 @@ class DeepOverrideHost {
 
   /****************************************************************************************/
 
-  cloneObjectState(objState: readonly<IObjectState>): IObjectState {
-    let cloned = new DeepOverrideHost.ObjectState(objState.$raw);
-    for (let prop in objState.ownProps) {
-      this.clonePropState(objState.ownProps[prop], cloned);
-    }
-    return cloned;
-  }
-
   /**
+   * When a property `propState` wasn't defined on `owner` previously by us
+   * and need to be defined, this method is invoked.
+   *
    * @todo Write property merge tests for access side-effect descriptors
    * {@link https://github.com/seanl-adg/deep-override/issues/4}
    */
   clonePropState(propState: readonly<IPropertyState>, owner: IObjectState): IPropertyState {
-    let cloned = new DeepOverrideHost.PropertyState(
-      owner,
-      propState.prop,
-      this.cloneObjectState(propState.obj),
-      propState.providedDesc
-    );
+    let prop = propState.prop;
+    let isConcrete = owner.isConcrete();
+    let origDesc:PropertyDescriptor|undefined;
+    let isNonConfigurable = false;
+    let nonConfigurableValue;
 
-    owner.ownProps[cloned.prop] = cloned;
+    if (isConcrete) {
+      origDesc = DescriptorUtils.getOwnPropertyDescriptor(owner.$raw, prop);
+      if (origDesc && !origDesc.configurable) {
+        isNonConfigurable = true;
+        // This invokes the setter possibly once.
+        nonConfigurableValue = owner.$raw![prop];
+      }
+    }
+    let nextObjState = !isNonConfigurable ?
+      new DeepOverrideHost.ObjectState(propState.obj.$raw) :
+      this.getObjectState(nonConfigurableValue);
 
-    if (owner.isConcrete()) {
-      let origDesc = DeepOverrideHost.getOwnPropertyDescriptor(owner.$raw, cloned.prop);
+    this.applyObjectState(nextObjState, propState.obj);
+
+    let cloned = new DeepOverrideHost.PropertyState(owner, prop, nextObjState, propState.providedDesc);
+
+    owner.ownProps[prop] = cloned;
+
+    if (isConcrete) {
       cloned.desc = origDesc;
 
-      /**
-       * @todo This should be a separate method which takes account of `generic` properties
-       * of `providedDesc`. For now, we can simply forbid `generic` properties on
-       * access side-effect descriptors.
-       * {@link https://github.com/seanl-adg/deep-override/issues/5}
-       */
-      let newDesc = this.cloneDesc(cloned.providedDesc) || this.descFactory(cloned);
+      let newDesc = this.getConcretePropDesc(cloned);
 
-      if (!origDesc || origDesc.configurable) {
-        DeepOverrideHost.defineProperty(owner.$raw, cloned.prop, newDesc);
+      if (!isNonConfigurable) {
+        DescriptorUtils.defineProperty(owner.$raw, prop, newDesc);
         /**
          * `AG_defineProperty('a.b', { get(), set() });, window.a = { b: 1 };` should
          * call the setter with incoming value `1`.
          */
-        if (origDesc && this.isDataDescriptor(origDesc)) {
-          this.invokeSetterRaw(owner.$raw!, newDesc, origDesc.value);
+        if (origDesc && DescriptorUtils.isDataDescriptor(origDesc)) {
+          DescriptorUtils.invokeSetter(newDesc, origDesc.value, owner.$raw);
           /**
            * `var a = {}; window.b = a; AG_defineProperty('b.c', { value: 1})` should
            * override `a` so that `a.c = 1`.
@@ -221,8 +224,7 @@ class DeepOverrideHost {
         * so we proceed directly to override the value.
         * If it was defined as a getter, we call it once.
         */
-        let value = owner.$raw![cloned.prop];
-        this.applyObjectStateRaw(value, propState.obj);
+        this.applyObjectStateRaw(nonConfigurableValue, propState.obj);
       }
     }
 
@@ -231,17 +233,31 @@ class DeepOverrideHost {
 
   /****************************************************************************************/
 
-  descFactory(propState: IPropertyState): PropertyDescriptor {
-    // ToDo: enumerability fix
-    let overrider = this;
+  /**
+   * For a given given property state `propState`, this method creates a property descriptor to be
+   * actually defined on a 'concrete' object and concrete property.
+   */
+  getConcretePropDesc(propState: IPropertyState): PropertyDescriptor {
+    let providedDesc = propState.providedDesc;
+    if (providedDesc && !DescriptorUtils.isAccessSideEffectDescriptor(providedDesc)) {
+      return DescriptorUtils.cloneDesc(providedDesc)!;
+    }
+
+    const overrider = this;
     // configurable, enumerable properties will follow that of the original descriptor.
     // See www.ecma-international.org/ecma-262/6.0/#sec-validateandapplypropertydescriptor
     // for the precise logic.
-    return {
+    const proxyDesc:PropertyDescriptor = {
       get: function () { return overrider.$get(propState, this); },
-      set: function (incoming) { return overrider.$set(propState, incoming, this); },
-      enumerable: propState.desc ? propState.desc.enumerable : true
+      set: function (incoming) { return overrider.$set(propState, incoming, this); }
     };
+
+    /**
+     * Adorns the proxyDesc with provided generic property descriptors.
+     */
+    providedDesc && DescriptorUtils.cloneGenericDescKeys(providedDesc, proxyDesc);
+
+    return proxyDesc;
   }
 
   /****************************************************************************************/
@@ -256,7 +272,7 @@ class DeepOverrideHost {
       (<Function>providedDesc.beforeGet).call(_this, propState.owner.$raw);
     }
     let value = this.invokeGetter(propState, _this);
-    if (_this === propState.owner.$raw || DeepOverrideHost.isPrototypeOf.call(propState.owner.$raw, _this)) {
+    if (_this === propState.owner.$raw || DescriptorUtils.isPrototypeOf.call(propState.owner.$raw, _this)) {
       this.applyObjectStateRaw(value, propState.obj);
     }
     return value;
@@ -268,7 +284,7 @@ class DeepOverrideHost {
    * @param incoming Z
    */
   $set(propState: IPropertyState, incoming: any, _this: any): any {
-    if (_this !== propState.owner.$raw && !DeepOverrideHost.isPrototypeOf.call(propState.owner.$raw, _this)) {
+    if (_this !== propState.owner.$raw && !DescriptorUtils.isPrototypeOf.call(propState.owner.$raw, _this)) {
       return this.invokeSetter(propState, incoming, _this);
     }
     if (propState.providedDesc && propState.providedDesc.beforeSet) {
@@ -277,11 +293,11 @@ class DeepOverrideHost {
 
     // Quick path for X.Y = X.Y.
     let desc = propState.desc;
-    if (desc && this.isDataDescriptor(desc) && desc.value === incoming) {
+    if (desc && DescriptorUtils.isDataDescriptor(desc) && desc.value === incoming) {
       return true;
     }
     let ret = this.invokeSetter(propState, incoming, _this);
-    if (!DeepOverrideHost.isExpando(incoming)) {
+    if (!DescriptorUtils.isExpando(incoming)) {
       return ret;
     }
     let objState = this.getObjectState(incoming);
@@ -308,7 +324,7 @@ class DeepOverrideHost {
   }
 
   applyObjectStateRaw(obj, idealObjectState: readonly<IObjectState>) {
-    if (!DeepOverrideHost.isExpando(obj)) { return obj; }
+    if (!DescriptorUtils.isExpando(obj)) { return obj; }
     let objState = this.getObjectState(obj);
     this.applyObjectState(objState, idealObjectState);
   }
@@ -334,7 +350,7 @@ class DeepOverrideHost {
           if (propState.desc) {
             // Intentionally blank
           } else {
-            propState.desc = this.cloneDesc(abstractPropertyState.providedDesc);
+            propState.desc = DescriptorUtils.cloneDesc(abstractPropertyState.providedDesc);
           }
         } else {
           DeepOverrideHost.warnNonConfigurableProperty(propState.prop);
@@ -351,28 +367,6 @@ class DeepOverrideHost {
 
   /****************************************************************************************/
 
-  getPropertyWriteDescriptor(value: any): PropertyDescriptor {
-    return {
-      value: value,
-      configurable: true,
-      writable: true,
-      enumerable: true
-    };
-  }
-
-  invokeSetterRaw(receiver: object, desc: PropertyDescriptor, incoming: any): any {
-    if (this.isDataDescriptor(desc)) {
-      if (desc.writable) {
-        desc.value = incoming;
-        return true;
-      } else {
-        return false;
-      }
-    }
-    if (!desc.set) { return false; }
-    return desc.set.call(receiver, incoming);
-  }
-
   invokeSetter(propState: IPropertyState, incoming, _this): boolean {
     let desc = propState.desc;
     if (!desc) {
@@ -382,28 +376,21 @@ class DeepOverrideHost {
        * invoke it, otherwise we should define a new data property on the owner.
        * @todo link an ECMAScript specification
        */
-      let ownerPType = DeepOverrideHost.getPrototypeOf(propState.owner.$raw);
+      let ownerPType = DescriptorUtils.getPrototypeOf(propState.owner.$raw);
       if (ownerPType !== null) {
-        let setterOnPType = DeepOverrideHost.lookupSetter.call(ownerPType, propState.prop);
+        let setterOnPType = DescriptorUtils.lookupSetter.call(ownerPType, propState.prop);
         if (setterOnPType) {
           return setterOnPType.call(_this, incoming);
         }
       }
-      if (!DeepOverrideHost.isExtensible(propState.owner.$raw)) {
+      if (!DescriptorUtils.isExtensible(propState.owner.$raw)) {
         DeepOverrideHost.warnNonExtensibleProperty(propState.prop);
         return false;
       }
-      propState.desc = this.getPropertyWriteDescriptor(incoming);
+      propState.desc = DescriptorUtils.getPropertyWriteDescriptor(incoming);
       return true;
     }
-    return this.invokeSetterRaw(_this, desc, incoming);
-  }
-
-  invokeGetterRaw(receiver: object, desc: PropertyDescriptor) {
-    if (this.isDataDescriptor(desc)) {
-      return desc.value;
-    }
-    if (desc.get) { return desc.get.call(receiver); }
+    return DescriptorUtils.invokeSetter(desc, incoming, _this);
   }
 
   invokeGetter(propState: IPropertyState, _this) {
@@ -411,73 +398,15 @@ class DeepOverrideHost {
     if (!desc) {
       const owner = propState.owner.$raw!;
       if (!(propState.prop in owner)) { return; }
-      let ownerPType = DeepOverrideHost.getPrototypeOf(owner);
+      let ownerPType = DescriptorUtils.getPrototypeOf(owner);
       if (ownerPType !== null) {
-        let getter = DeepOverrideHost.lookupGetter.call(ownerPType, propState.prop);
+        let getter = DescriptorUtils.lookupGetter.call(ownerPType, propState.prop);
         if (getter) { return getter.call(_this); }
         else { return ownerPType[propState.prop]; }
       }
       return;
     }
-    return this.invokeGetterRaw(_this, desc);
-  }
-
-  /****************************************************************************************/
-
-  isDataDescriptor(desc: PropertyDescriptor): boolean {
-    return typeof desc.writable !== 'undefined'
-  }
-
-  static readonly DESC_KEYS = 'value,get,set,writable,configurable,enumerable'.split(',');
-  static readonly DESC_KEYS_LENGTH = 6; /* DeepOverrideHost.DESC_KEYS.length */
-
-  cloneDesc(desc: readonly<ExtendedPropertyDescriptor> | undefined): PropertyDescriptor | undefined {
-    if (!desc) { return undefined; }
-    let cloned = {};
-    let i = DeepOverrideHost.DESC_KEYS_LENGTH;
-    let anyKeyIsPresent = false;
-    while (i--) {
-      let key = DeepOverrideHost.DESC_KEYS[i];
-      if (DeepOverrideHost.hasOwnProperty.call(desc, key)) {
-        anyKeyIsPresent = true;
-        cloned[key] = desc[key];
-      }
-    }
-    // Even if no key is present, extended propertyes (beforeGet, beforeSet)
-    // may present.
-    return anyKeyIsPresent ? cloned : undefined;
-  }
-
-  static defineProperty = defineProperty;
-  static getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
-  static isExtensible = Object.isExtensible;
-  static getPrototypeOf = Object.getPrototypeOf;
-
-  static hasOwnProperty = Object.prototype.hasOwnProperty;
-  static isPrototypeOf = Object.prototype.isPrototypeOf;
-
-  // Object#__lookupGetter__ is not supported on IE10 and lower.
-  static lookupGetter = Object.prototype.__lookupGetter__ || function (prop: PropertyKey) {
-    let desc = DeepOverrideHost.lookupDescriptor(this, prop);
-    return desc && desc.get ? desc.get : undefined;
-  };
-  static lookupSetter = Object.prototype.__lookupSetter__ || function (prop: PropertyKey) {
-    let desc = DeepOverrideHost.lookupDescriptor(this, prop);
-    return desc && desc.set ? desc.set : undefined;
-  };
-  static lookupDescriptor = (obj: object, prop: PropertyKey): PropertyDescriptor | undefined => {
-    if (!(prop in obj)) { return; }
-    while (!DeepOverrideHost.hasOwnProperty.call(obj, prop)) {
-      obj = DeepOverrideHost.getPrototypeOf(obj);
-    }
-    return DeepOverrideHost.getOwnPropertyDescriptor(obj, prop);
-  }
-
-  static isExpando = (obj: any): boolean => {
-    let type = typeof obj;
-    if (type === 'function') { return true; }
-    if (type === 'object' && obj !== null) { return true; }
-    return false;
+    return DescriptorUtils.invokeGetter(desc, _this);
   }
 
   /****************************************************************************************/
@@ -578,6 +507,125 @@ class DeepOverrideHost {
   /****************************************************************************************/
 
 }
+
+/****************************************************************************************/
+
+abstract class DescriptorUtils {
+
+  static isDataDescriptor(desc: PropertyDescriptor): boolean {
+    return typeof desc.writable !== 'undefined'
+  }
+
+  static isAccessSideEffectDescriptor(desc:readonly<ExtendedPropertyDescriptor>): boolean {
+    return 'beforeGet' in desc || 'beforeSet' in desc;
+  }
+
+  private static readonly DESC_KEYS = ["cofigurable", "enumerable", "value", "get", "set", "writable"];
+  private static readonly GENERIC_DESC_KEYS = DescriptorUtils.DESC_KEYS.slice(0, 2);
+
+  // Helper function to be used for functions that clones property descriptors
+  private static copyProperties(from:object, to:object, keys:string[]) {
+    for (let i = 0, l = keys.length; i < l; i++) {
+      let key = keys[i];
+      if (key in from) {
+        to[key] = from[key];
+      }
+    }
+  }
+
+  static cloneDesc(desc: readonly<PropertyDescriptor> | undefined): PropertyDescriptor | undefined {
+    if (!desc) { return undefined; }
+    let cloned = {};
+    DescriptorUtils.copyProperties(desc, cloned, DescriptorUtils.DESC_KEYS);
+    return cloned;
+  }
+
+  static cloneGenericDescKeys(from: readonly<PropertyDescriptor>, to:PropertyDescriptor) {
+    DescriptorUtils.copyProperties(from, to, DescriptorUtils.GENERIC_DESC_KEYS);
+  }
+
+  static invokeGetter(desc: PropertyDescriptor, receiver) {
+    if (DescriptorUtils.isDataDescriptor(desc)) {
+      return desc.value;
+    }
+    if (desc.get) { return desc.get.call(receiver); }
+  }
+
+  /**
+   * Returned value indicates whether the [[Set]] has succeeded.
+   *
+   * @todo Sometimes we need to throw appropriate errors.
+   * We need to consider whether this should be thrown from this.
+   */
+  static invokeSetter(desc:PropertyDescriptor, value, receiver):boolean {
+    if (DescriptorUtils.isDataDescriptor(desc)) {
+      if (desc.writable) {
+        desc.value = value;
+        return true;
+      } else {
+        return false;
+      }
+    }
+    if (!desc.set) { return false; }
+    // ToDo, should check errors here?
+    desc.set.call(receiver, value);
+    return true;
+  }
+
+  /**
+   * Creates a property descriptor to be defined on an object on [[Set]] operation
+   * when the receiver didn't own the property.
+   * {@link http://www.ecma-international.org/ecma-262/7.0/#sec-ordinaryset}
+   */
+  static getPropertyWriteDescriptor(value):PropertyDescriptor {
+    return {
+      value: value,
+      configurable: true,
+      writable: true,
+      enumerable: true
+    };
+  }
+
+
+  static defineProperty = defineProperty;
+  static getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+  static isExtensible = Object.isExtensible;
+  static getPrototypeOf = Object.getPrototypeOf;
+
+  static hasOwnProperty = Object.prototype.hasOwnProperty;
+  static isPrototypeOf = Object.prototype.isPrototypeOf;
+
+  // Object#__lookupGetter__ is not supported on IE10 and lower.
+  static lookupGetter = Object.prototype.__lookupGetter__ || function (prop: PropertyKey) {
+    let desc = DescriptorUtils.lookupDescriptor(this, prop);
+    return desc && desc.get ? desc.get : undefined;
+  };
+  static lookupSetter = Object.prototype.__lookupSetter__ || function (prop: PropertyKey) {
+    let desc = DescriptorUtils.lookupDescriptor(this, prop);
+    return desc && desc.set ? desc.set : undefined;
+  };
+
+  private static lookupDescriptor = (obj: object, prop: PropertyKey): PropertyDescriptor | undefined => {
+    if (!(prop in obj)) { return; }
+    while (!DeepOverrideHost.hasOwnProperty.call(obj, prop)) {
+      obj = DescriptorUtils.getPrototypeOf(obj);
+    }
+    return DescriptorUtils.getOwnPropertyDescriptor(obj, prop);
+  }
+
+  static isExpando = (obj: any): boolean => {
+    let type = typeof obj;
+    if (type === 'function') { return true; }
+    if (type === 'object' && obj !== null) { return true; }
+    return false;
+  }
+}
+
+
+/****************************************************************************************/
+
+
+
 
 /****************************************************************************************/
 /****************************************************************************************/
