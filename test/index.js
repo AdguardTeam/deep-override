@@ -415,6 +415,27 @@ suite('AG_defineProperty', function() {
             base.a.b.c.d = 2;
             assert.equal(setCount, 1);
         })
+
+        test('Generic property descriptor keys should be applied', function() {
+            base.a = 1;
+            assert.ok(base.propertyIsEnumerable('a'));
+
+            let getCount = 0;
+            AG_defineProperty('a', {
+                beforeGet: function() {
+                    getCount++;
+                },
+                enumerable: false,
+                configurable: false
+            }, base);
+
+            assert.notOk(base.propertyIsEnumerable('a'));
+            assert.equal(base.a, 1);
+            assert.equal(getCount, 1);
+
+            let desc = Object.getOwnPropertyDescriptor(base, 'a');
+            assert.equal(desc.configurable, false);
+        });
     });
 });
 

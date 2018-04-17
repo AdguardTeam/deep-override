@@ -520,7 +520,7 @@ abstract class DescriptorUtils {
     return 'beforeGet' in desc || 'beforeSet' in desc;
   }
 
-  private static readonly DESC_KEYS = ["cofigurable", "enumerable", "value", "get", "set", "writable"];
+  private static readonly DESC_KEYS = ["configurable", "enumerable", "value", "get", "set", "writable"];
   private static readonly GENERIC_DESC_KEYS = DescriptorUtils.DESC_KEYS.slice(0, 2);
 
   // Helper function to be used for functions that clones property descriptors
