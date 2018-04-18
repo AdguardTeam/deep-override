@@ -455,7 +455,8 @@ class DeepOverrideHost {
 
   /****************************************************************************************/
 
-  private splitter: RegExp;
+  private reSplit = /^([^\\\.]|\\.)*?\./;
+  private reUnescape = /\\(.)/g;
 
   throwPathError(): never {
     throw DEBUG ? new Error("Malformed path string") : 1;
@@ -464,7 +465,8 @@ class DeepOverrideHost {
   buildAbstractStateTree(path: string, root?: IObjectState): IPropertyState {
     path += '.';
     root = root || new DeepOverrideHost.ObjectState();
-    let splitter = this.splitter || (this.splitter = /^([^\\\.]|\\.)*?\./);
+    let reSplit = this.reSplit;
+    let reUnescape = this.reUnescape;
 
     let data: IObjectState = root;
     let match: RegExpMatchArray | null;
@@ -473,12 +475,12 @@ class DeepOverrideHost {
     let nextData: IObjectState;
     let propData: IPropertyState | undefined;
     while (path) {
-      match = splitter.exec(path);
+      match = reSplit.exec(path);
       if (match === null) {
         return this.throwPathError();
       }
       matchLength = match[0].length;
-      prop = path.slice(0, matchLength - 1);
+      prop = path.slice(0, matchLength - 1).replace(reUnescape, '$1');
       path = path.slice(matchLength);
       propData = data.ownProps[prop];
       if (!propData) {
@@ -585,7 +587,6 @@ abstract class DescriptorUtils {
       enumerable: true
     };
   }
-
 
   static defineProperty = defineProperty;
   static getOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;

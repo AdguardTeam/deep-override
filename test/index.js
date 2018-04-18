@@ -437,6 +437,16 @@ suite('AG_defineProperty', function() {
             assert.equal(desc.configurable, false);
         });
     });
+
+    suite('Parsing path', function() {
+        test('should parse escaped properties correctly', function() {
+            AG_defineProperty('ಠ_ಠ\b\f.\n\\.\\r\r\t\x2e\v', { value: true }, base);
+
+            base["ಠ_ಠ\b\f"] = {};
+            base["ಠ_ಠ\b\f"]["\n.r\r\t"] = {};
+            expect(base["ಠ_ಠ\b\f"]["\n.r\r\t"]["\v"]).to.equal(true);
+        });
+    })
 });
 
 
