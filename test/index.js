@@ -35,11 +35,11 @@ suite('AG_defineProperty', function() {
             test1.a = { d : 3 };
             test1 = base.test1 = { a : 4, c : 5 };
             test1.a = {};
-            test1.a.b = 4;
-            test1.a = { b : { e : 6 }, c : 7 };
+            test1.a.b = 4;                      // setCount is 1
+            test1.a = { b : { e : 6 }, c : 7 }; // setCount is 2
 
             assert.equal(test1.c, 5);
-            // assert.equal(setCount, 1);
+            assert.equal(setCount, 2);
             assert.equal(getCount, 0);
             assert.equal(test1.a.b, 1);
             assert.equal(getCount, 1);
@@ -74,11 +74,11 @@ suite('AG_defineProperty', function() {
                 value: { b: 0 },
                 writable: true
             });
-            let test = base.test = tmp;
+            let test = base.test = tmp;  // setCount is 1
             assert.equal(test.a.b, 1);
             assert.equal(getCount, 1);
-            test.a.b = 0;
-            //assert.equal(setCount, 1);
+            test.a.b = 0;                // setCount is 2
+            assert.equal(setCount, 2);
             assert.equal(test.a.b, 1);
         });
 
@@ -100,15 +100,15 @@ suite('AG_defineProperty', function() {
 
             let test6 = base.test6 = {};
             test6.a = {};
-            test6.a.b = 2;
+            test6.a.b = 2;                  // setCount1 is 1
 
-            //assert.equal(setCount1, 1);
+            assert.equal(setCount1, 1);
             assert.equal(test6.a.b, 1);
             assert.equal(getCount1, 1);
 
-            test6.a.c = 2;
+            test6.a.c = 2;                  // setCount2 is 1
 
-            //assert.equal(setCount2, 1);
+            assert.equal(setCount2, 1);
             assert.equal(test6.a.c, 1);
             assert.equal(getCount2, 1);
         });
