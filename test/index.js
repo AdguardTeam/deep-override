@@ -16,7 +16,7 @@ try { DeepOverrideHost = Module.__get__('DeepOverrideHost'); } catch (e) { }
 suite('AG_defineProperty', function() {
     let base;
 
-    beforeEach(function() {
+    setup(function() {
         base = {};
     });
 

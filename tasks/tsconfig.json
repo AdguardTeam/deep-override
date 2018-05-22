@@ -5,7 +5,7 @@
         "outDir": "../build/tscc",
         "module": "commonjs"
     },
-    "include": [
-        "../index.ts"
+    "files": [
+        "../../index.ts"
     ]
 }
