@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/AdguardTeam/PopupBlocker.svg?branch=master)](https://travis-ci.org/AdguardTeam/deep-override)
+[![Build Status](https://travis-ci.com/AdguardTeam/PopupBlocker.svg?branch=master)](https://travis-ci.com/AdguardTeam/deep-override)
 
 # About
 
