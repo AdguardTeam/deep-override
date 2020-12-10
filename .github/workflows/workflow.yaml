@@ -1,0 +1,31 @@
+name: Tests
+
+on:
+  push
+
+jobs:
+  tests:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Use Node.js
+        uses: actions/setup-node@v1
+        with:
+          node-version: 14.x
+
+      - name: yarn install
+        run: yarn install
+
+      - name: yarn build-dev
+        run: yarn run build-dev
+
+      - name: yarn test
+        run: yarn run test
+
+      - name: yarn minified build
+        run: yarn run build
+
+      - name: yarn test
+        run: yarn run test
