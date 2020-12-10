@@ -1,5 +1,3 @@
-[![Build Status](https://travis-ci.com/AdguardTeam/PopupBlocker.svg?branch=master)](https://travis-ci.com/AdguardTeam/deep-override)
-
 # About
 
 Experimental function to transparently override nested JS objects.
