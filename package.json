@@ -1,0 +1,26 @@
+{
+  "name": "deep-override",
+  "version": "1.0.4",
+  "main": "index.js",
+  "license": "MIT",
+  "scripts": {
+    "clean": "node tasks/clean.js",
+    "tsickle": "tsickle --externs=build/tscc/generated-externs.js --typed -- -p tasks",
+    "tscc": "java -jar node_modules/google-closure-compiler/compiler.jar --flagfile tasks/closure.conf",
+    "post": "node tasks/post.js",
+    "build": "yarn run clean && yarn run tsickle && yarn run tscc && yarn run post",
+    "post-dev": "node tasks/post-dev.js",
+    "build-dev": "yarn run clean && tsc && yarn run post-dev",
+    "test": "mocha --ui tdd"
+  },
+  "devDependencies": {
+    "chai": "^4.1.2",
+    "fs-extra": "^4.0.2",
+    "google-closure-compiler": "^20170910.0.0",
+    "mocha": "^4.0.1",
+    "replace-in-file": "^3.0.0-beta.2",
+    "rewire": "^2.5.2",
+    "tsickle": "^0.28.0",
+    "typescript": "2.8.3"
+  }
+}
